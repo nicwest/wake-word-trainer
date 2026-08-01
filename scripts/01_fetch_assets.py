@@ -17,10 +17,15 @@ Deliberately smaller than the reference recipes:
     microWakeWord's author publishes (speech, dinner_party, dinner_party_eval,
     no_speech). These are already-augmented spectrograms, not raw audio, and
     there's no smaller substitute without giving up false-accept robustness.
+
+Also clones piper-sample-generator's source (not the PyPI package -- see
+requirements.txt) so 02_generate_samples.py can run it with the sibling
+piper_train package PyPI never bundles.
 """
 
 import argparse
 import os
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -32,6 +37,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from mww_trainer import paths  # noqa: E402
 
 PIPER_GENERATOR_URL = "https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt"
+
+PIPER_SAMPLE_GENERATOR_REPO = "https://github.com/rhasspy/piper-sample-generator.git"
+PIPER_SAMPLE_GENERATOR_REF = "v3.2.0"  # matches the PyPI version this was verified against
 
 # Streamed via the `datasets` library rather than a hardcoded file URL: the
 # upstream repo has reorganized its raw file layout before (tar shards ->
@@ -82,6 +90,30 @@ def fetch_piper_generator(force: bool) -> None:
         return
     print("[piper] downloading generator checkpoint (~75 MB)")
     download(PIPER_GENERATOR_URL, dest)
+
+
+def fetch_piper_sample_generator_src(force: bool) -> None:
+    # Not `pip install piper-sample-generator` -- see the note at the top of
+    # requirements.txt. Git clone instead, pinned to a tag, so 02_generate_samples.py
+    # can put it on PYTHONPATH and get both piper_sample_generator and its
+    # sibling piper_train package (which the PyPI wheel never bundles).
+    out_dir = paths.piper_sample_generator_src_dir()
+    if is_done(out_dir) and not force:
+        print(f"[piper-sample-generator-src] already have {out_dir}")
+        return
+    if out_dir.exists():
+        import shutil
+
+        shutil.rmtree(out_dir)
+    print(f"[piper-sample-generator-src] cloning {PIPER_SAMPLE_GENERATOR_REPO}@{PIPER_SAMPLE_GENERATOR_REF}")
+    subprocess.run(
+        [
+            "git", "clone", "--depth", "1", "--branch", PIPER_SAMPLE_GENERATOR_REF,
+            PIPER_SAMPLE_GENERATOR_REPO, str(out_dir),
+        ],
+        check=True,
+    )
+    mark_done(out_dir)
 
 
 def fetch_rir(force: bool) -> None:
@@ -249,6 +281,7 @@ def main() -> None:
     print(f"Using MWW_DATA_DIR={paths.data_dir()}")
 
     fetch_piper_generator(args.force)
+    fetch_piper_sample_generator_src(args.force)
     fetch_rir(args.force)
     if not args.skip_background:
         fetch_audioset(args.audioset_clips, args.force)

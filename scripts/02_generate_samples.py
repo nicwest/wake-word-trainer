@@ -6,6 +6,7 @@ via microwakeword's own Augmentation class, not here.
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,10 @@ def main() -> None:
     if not generator.exists():
         sys.exit(f"Generator checkpoint not found at {generator}. Run 01_fetch_assets.py first.")
 
+    src_dir = paths.piper_sample_generator_src_dir()
+    if not src_dir.exists():
+        sys.exit(f"piper-sample-generator source not found at {src_dir}. Run 01_fetch_assets.py first.")
+
     out_dir = paths.generated_samples_dir(args.wake_word)
     if out_dir.exists() and any(out_dir.glob("*.wav")) and not args.force:
         print(f"{out_dir} already has samples; pass --force to regenerate.")
@@ -54,8 +59,16 @@ def main() -> None:
         "--output-dir",
         str(out_dir),
     ]
+    # Run against the git-cloned source (src_dir) rather than a pip-installed
+    # package: piper_sample_generator's __main__.py imports its sibling
+    # piper_train package, which PyPI never bundles (see requirements.txt).
+    # Prepending src_dir to PYTHONPATH makes both importable from the clone.
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(src_dir) + (os.pathsep + existing_pythonpath if existing_pythonpath else "")
+
     print("+", " ".join(cmd))
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=env)
     print(f"Wrote samples to {out_dir}")
 
 

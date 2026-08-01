@@ -16,7 +16,18 @@ torchaudio
 # (github.com/meta-pytorch/torchcodec) pairs 0.9.x with torch 2.9.x, matching
 # our pin above. Bump both together if the torch pin ever moves.
 torchcodec<0.10,>=0.9
-piper-sample-generator
+# NOT `pip install piper-sample-generator`: its PyPI wheel only bundles the
+# piper_sample_generator package (see its pyproject.toml:
+# packages.find.include = ["piper_sample_generator*"]), but __main__.py's
+# .pt-checkpoint code path imports the sibling `piper_train` package, which
+# lives in the same GitHub repo but was never published -- there's no
+# `piper-train` on PyPI at all. Upstream's own notebook works around this by
+# git-cloning the whole repo and adding it to sys.path instead of pip
+# installing; 01_fetch_assets.py does the same (see fetch_piper_sample_generator_src
+# and PIPER_SAMPLE_GENERATOR_REF), and 02_generate_samples.py points
+# PYTHONPATH at that clone. Just need its actual runtime deps here:
+piper-tts==1.3.0
+webrtcvad
 # NOTE: piper-sample-generator depends on plain `webrtcvad` (compiled from
 # source) while microwakeword depends on `webrtcvad-wheels` (prebuilt). Both
 # provide the same `webrtcvad` import name; pip will install both

@@ -26,6 +26,15 @@ def piper_dir() -> Path:
     return assets_dir() / "piper"
 
 
+def piper_sample_generator_src_dir() -> Path:
+    """Git clone of the piper-sample-generator repo (not the PyPI package --
+    see the note in requirements.txt for why). Put on PYTHONPATH when
+    invoking `python -m piper_sample_generator` so the sibling piper_train
+    package it imports is importable too.
+    """
+    return assets_dir() / "piper-sample-generator-src"
+
+
 def rir_dir() -> Path:
     return assets_dir() / "rir"
 

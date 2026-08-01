@@ -56,6 +56,7 @@ $MWW_DATA_DIR/
   venv/                        one combined venv (torch + tensorflow); reused if requirements.txt is unchanged
   assets/                      shared across every wake word you train
     piper/                     LibriTTS-R generator checkpoint (~200MB)
+    piper-sample-generator-src/  git clone, not pip installed -- see requirements.txt
     rir/                       MIT environmental impulse responses (~8MB)
     background/                curated background-noise subset (audioset clips + fma_xs)
     negative_features/         pre-extracted negative spectrogram sets (speech, dinner_party, dinner_party_eval, no_speech)
