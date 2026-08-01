@@ -72,12 +72,27 @@ def real_samples_dir(wake_word: str) -> Path:
     return work_dir(wake_word) / "real_samples"
 
 
+def false_positive_samples_dir(wake_word: str) -> Path:
+    """Captured false wakes -- clips where the model (or a predecessor of it)
+    triggered but the wake word wasn't actually said. These are negative
+    examples, kept as their own weighted feature set (like real_samples/ is
+    for positives) rather than merged into the shared negative_features/
+    assets, since they're hand-picked examples of exactly what this specific
+    model gets wrong.
+    """
+    return work_dir(wake_word) / "false_positive_samples"
+
+
 def features_dir(wake_word: str) -> Path:
     return work_dir(wake_word) / "features"
 
 
 def real_features_dir(wake_word: str) -> Path:
     return work_dir(wake_word) / "real_features"
+
+
+def false_positive_features_dir(wake_word: str) -> Path:
+    return work_dir(wake_word) / "false_positive_features"
 
 
 def training_config_path(wake_word: str) -> Path:

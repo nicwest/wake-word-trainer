@@ -3,13 +3,16 @@
 train/validation/testing sets. Mirrors the reference microWakeWord notebook's
 augmentation + feature-generation cells.
 
-Runs over two independent sources, each producing its own feature set so
+Runs over three independent sources, each producing its own feature set so
 04_train.py can weight them separately:
   - generated_samples/ -- synthetic TTS positives from 02_generate_samples.py
     (required)
-  - real_samples/ -- real, non-synthetic recordings you drop in yourself (e.g.
+  - real_samples/ -- real, non-synthetic positives you drop in yourself (e.g.
     device-captured false negatives you're promoting into training data;
     optional, skipped with a note if empty)
+  - false_positive_samples/ -- captured false wakes: clips where the model
+    triggered but the wake word wasn't said. Negative examples, not positive
+    (optional, skipped with a note if empty)
 """
 
 import argparse
@@ -130,6 +133,13 @@ def main() -> None:
 
     build_features("generated", generated_dir, paths.features_dir(args.wake_word), augmenter, args.force)
     build_features("real", paths.real_samples_dir(args.wake_word), paths.real_features_dir(args.wake_word), augmenter, args.force)
+    build_features(
+        "false_positive",
+        paths.false_positive_samples_dir(args.wake_word),
+        paths.false_positive_features_dir(args.wake_word),
+        augmenter,
+        args.force,
+    )
 
 
 if __name__ == "__main__":

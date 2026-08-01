@@ -26,7 +26,7 @@ NEGATIVE_FEATURE_WEIGHTS = {
 }
 
 
-def build_config(wake_word: str, training_steps: int, real_sampling_weight: float) -> dict:
+def build_config(wake_word: str, training_steps: int, real_sampling_weight: float, false_positive_sampling_weight: float) -> dict:
     features = [
         {
             "features_dir": str(paths.features_dir(wake_word)),
@@ -57,6 +57,25 @@ def build_config(wake_word: str, training_steps: int, real_sampling_weight: floa
         )
     else:
         print(f"No real_samples features at {real_features_dir} (run 03_build_features.py after adding real_samples/ clips, if you have any).")
+
+    false_positive_features_dir = paths.false_positive_features_dir(wake_word)
+    if false_positive_features_dir.exists() and any(false_positive_features_dir.glob("*/wakeword_mmap")):
+        # Captured false wakes -- negative examples, and the highest-value
+        # kind: hand-picked instances of exactly what this model gets wrong,
+        # not generic negative audio. Weighted above the shared
+        # negative_features/ sets below for that reason.
+        features.append(
+            {
+                "features_dir": str(false_positive_features_dir),
+                "sampling_weight": false_positive_sampling_weight,
+                "penalty_weight": 1.0,
+                "truth": False,
+                "truncation_strategy": "random",
+                "type": "mmap",
+            }
+        )
+    else:
+        print(f"No false_positive_samples features at {false_positive_features_dir} (run 03_build_features.py after adding false_positive_samples/ clips, if you have any).")
 
     for name, weights in NEGATIVE_FEATURE_WEIGHTS.items():
         feature_dir = paths.negative_features_dir() / name
@@ -101,10 +120,11 @@ def main() -> None:
     parser.add_argument("--training-steps", type=int, default=10000)
     parser.add_argument("--restore-checkpoint", type=int, default=1, help="Resume from checkpoint if the train dir already has one")
     parser.add_argument("--real-sampling-weight", type=float, default=4.0, help="Sampling weight for real_samples/ features, if present (higher than generated's 2.0 -- there are usually far fewer of them)")
+    parser.add_argument("--false-positive-sampling-weight", type=float, default=15.0, help="Sampling weight for false_positive_samples/ features, if present (higher than the shared negative sets -- hand-picked hard negatives specific to this model)")
     parser.add_argument("--config-only", action="store_true", help="Only write the yaml, don't launch training")
     args = parser.parse_args()
 
-    config = build_config(args.wake_word, args.training_steps, args.real_sampling_weight)
+    config = build_config(args.wake_word, args.training_steps, args.real_sampling_weight, args.false_positive_sampling_weight)
     config_path = paths.training_config_path(args.wake_word)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     with open(config_path, "w") as f:

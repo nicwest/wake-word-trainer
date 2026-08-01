@@ -63,8 +63,10 @@ $MWW_DATA_DIR/
   work/<wake_word_slug>/       one subtree per phrase you train
     generated_samples/         raw TTS positives
     real_samples/               real (non-synthetic) positives you drop in yourself -- see below
-    features/{training,validation,testing}/         features for generated_samples/
-    real_features/{training,validation,testing}/     features for real_samples/, if any
+    false_positive_samples/     captured false wakes (negative examples) -- see below
+    features/{training,validation,testing}/                features for generated_samples/
+    real_features/{training,validation,testing}/            features for real_samples/, if any
+    false_positive_features/{training,validation,testing}/  features for false_positive_samples/, if any
     training_parameters.yaml
     trained_models/
     output/<slug>.tflite, <slug>.json
@@ -93,6 +95,23 @@ With only a handful of clips, the automatic train/validation/testing split
 can fail outright (not enough clips to carve out a slice) -- that's expected
 until you've collected enough to be worth splitting; the error message says
 so explicitly rather than crashing cryptically.
+
+### Captured false positives (false wakes)
+
+The mirror-image case: clips where the model triggered but the wake word
+wasn't actually said. These are **negative** examples -- the same idea as
+Tater's "mark as False wake" review flow, hand-picked instances of exactly
+what this model gets wrong, which makes them the highest-value negative
+signal available (more so than the generic shared `negative_features/`
+sets, which is why they default to a higher sampling weight).
+
+Drop them in `work/<wake_word_slug>/false_positive_samples/` and re-run
+`03_build_features.py` -- same format rules as `real_samples/`. They get
+their own feature pipeline (`false_positive_features/`) and their own
+`training_parameters.yaml` entry with `truth: false` and a default sampling
+weight of 15.0 (vs. 10.0/5.0 for the shared negative sets, via
+`04_train.py --false-positive-sampling-weight`). Skipped silently if empty,
+same as `real_samples/`.
 
 ## Quick start
 
