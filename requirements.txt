@@ -35,7 +35,15 @@ webrtcvad
 # site-packages. Harmless in practice (same upstream API) but not clean.
 
 # --- microWakeWord training (not on PyPI, installed straight from git) ---
-microwakeword @ git+https://github.com/kahrendt/microWakeWord.git
+# Must be -e (editable), not a normal `name @ git+URL` install: microwakeword's
+# setup.py uses packages=find_packages(), and microwakeword/audio/ has no
+# __init__.py, so a real wheel build silently drops that whole subpackage
+# (confirmed empirically -- `import microwakeword.audio.augmentation` raises
+# ModuleNotFoundError after a plain git install, no error at install time).
+# An editable install clones into the venv's src/ and imports straight from
+# that live tree via Python's implicit namespace packages, which sidesteps
+# find_packages() entirely since nothing gets copied into a wheel manifest.
+-e git+https://github.com/kahrendt/microWakeWord.git#egg=microwakeword
 audiomentations
 audio_metadata
 datasets
