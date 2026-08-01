@@ -45,7 +45,28 @@ REQ_HASH="$(sha256sum "${ROOTDIR}/requirements.txt" | awk '{print $1}')"
 if [[ ! -f "${PIN_FILE}" ]] || [[ "$(cat "${PIN_FILE}")" != "${REQ_HASH}" ]]; then
   echo "Installing/upgrading requirements"
   pip install -U pip setuptools wheel
-  # --upgrade matters here, not just on first install: an unpinned
+
+  # Cleanup pass BEFORE the real install, not after: `pip install -r` never
+  # uninstalls a package that's been dropped from requirements.txt, so
+  # anything we've deliberately excluded/replaced can linger indefinitely
+  # across reinstalls. Two concrete cases hit for real:
+  #   - piper-sample-generator (PyPI): replaced by a git clone (see the note
+  #     in requirements.txt), but its stale audiomentations==0.33.0 pin
+  #     causes a spurious resolver-conflict warning on every reinstall.
+  #   - webrtcvad (plain): both it and webrtcvad-wheels install a same-named
+  #     `webrtcvad.py`, and pip has no idea the two collide -- whichever
+  #     installs/reinstalls LAST physically wins, silently. Plain webrtcvad
+  #     actually won that race for real and broke the whole pipeline (its
+  #     webrtcvad.py does `import pkg_resources`, which recent setuptools
+  #     doesn't reliably bundle). Uninstalling both before reinstalling
+  #     webrtcvad-wheels guarantees a clean, correct file regardless of
+  #     whatever ordering corruption happened in a previous run -- `pip
+  #     install --upgrade` alone wouldn't fix this, since it's a no-op for a
+  #     package that's already "satisfied" even if its files got clobbered
+  #     by something else afterwards.
+  pip uninstall -y piper-sample-generator webrtcvad webrtcvad-wheels >/dev/null 2>&1 || true
+
+  # --upgrade matters here too, not just on first install: an unpinned
   # requirement line is "satisfied" by whatever's already installed, even a
   # stale version pulled in earlier by a *different* package's hard pin that
   # has since been removed from requirements.txt. Without --upgrade that
@@ -54,15 +75,6 @@ if [[ ! -f "${PIN_FILE}" ]] || [[ "$(cat "${PIN_FILE}")" != "${REQ_HASH}" ]]; th
   # 0.33.0; after removing that dependency, plain `pip install -r` left
   # 0.33.0 in place since our own line was just "audiomentations").
   pip install --upgrade -r "${ROOTDIR}/requirements.txt"
-  # Belt-and-suspenders cleanup: the PyPI piper-sample-generator package
-  # (deliberately NOT in requirements.txt -- see the note there) may still
-  # be lingering from before that switch. `pip install -r` never removes a
-  # package that's no longer listed, and its stale audiomentations==0.33.0
-  # pin causes a spurious resolver conflict warning against our own
-  # audiomentations>=0.35.0 on every reinstall. Not otherwise used (
-  # 02_generate_samples.py's PYTHONPATH points at the git clone instead) --
-  # safe to remove if present, harmless if not.
-  pip uninstall -y piper-sample-generator >/dev/null 2>&1 || true
   echo "${REQ_HASH}" > "${PIN_FILE}"
 else
   echo "Reusing existing venv (requirements.txt unchanged since last install)"
