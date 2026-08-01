@@ -26,7 +26,7 @@ NEGATIVE_FEATURE_WEIGHTS = {
 }
 
 
-def build_config(wake_word: str, training_steps: int) -> dict:
+def build_config(wake_word: str, training_steps: int, real_sampling_weight: float) -> dict:
     features = [
         {
             "features_dir": str(paths.features_dir(wake_word)),
@@ -37,6 +37,27 @@ def build_config(wake_word: str, training_steps: int) -> dict:
             "type": "mmap",
         }
     ]
+
+    real_features_dir = paths.real_features_dir(wake_word)
+    if real_features_dir.exists() and any(real_features_dir.glob("*/wakeword_mmap")):
+        # Real (non-synthetic) positives -- e.g. promoted false-negative
+        # captures -- kept as their own weighted feature set rather than
+        # merged into the TTS set, so they can be upweighted: there are
+        # usually far fewer of them, but they're the most representative
+        # signal for real-world recall.
+        features.append(
+            {
+                "features_dir": str(real_features_dir),
+                "sampling_weight": real_sampling_weight,
+                "penalty_weight": 1.0,
+                "truth": True,
+                "truncation_strategy": "truncate_start",
+                "type": "mmap",
+            }
+        )
+    else:
+        print(f"No real_samples features at {real_features_dir} (run 03_build_features.py after adding real_samples/ clips, if you have any).")
+
     for name, weights in NEGATIVE_FEATURE_WEIGHTS.items():
         feature_dir = paths.negative_features_dir() / name
         if not feature_dir.exists():
@@ -79,10 +100,11 @@ def main() -> None:
     parser.add_argument("wake_word")
     parser.add_argument("--training-steps", type=int, default=10000)
     parser.add_argument("--restore-checkpoint", type=int, default=1, help="Resume from checkpoint if the train dir already has one")
+    parser.add_argument("--real-sampling-weight", type=float, default=4.0, help="Sampling weight for real_samples/ features, if present (higher than generated's 2.0 -- there are usually far fewer of them)")
     parser.add_argument("--config-only", action="store_true", help="Only write the yaml, don't launch training")
     args = parser.parse_args()
 
-    config = build_config(args.wake_word, args.training_steps)
+    config = build_config(args.wake_word, args.training_steps, args.real_sampling_weight)
     config_path = paths.training_config_path(args.wake_word)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     with open(config_path, "w") as f:

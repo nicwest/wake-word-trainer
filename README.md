@@ -77,11 +77,37 @@ $MWW_DATA_DIR/
     negative_features/         pre-extracted negative spectrogram sets (speech, dinner_party, dinner_party_eval, no_speech)
   work/<wake_word_slug>/       one subtree per phrase you train
     generated_samples/         raw TTS positives
-    features/{training,validation,testing}/
+    real_samples/               real (non-synthetic) positives you drop in yourself -- see below
+    features/{training,validation,testing}/         features for generated_samples/
+    real_features/{training,validation,testing}/     features for real_samples/, if any
     training_parameters.yaml
     trained_models/
     output/<slug>.tflite, <slug>.json
 ```
+
+### Real positive samples (e.g. captured false negatives)
+
+TTS-generated samples are the bulk of the positive training data, but real
+device-captured recordings -- especially false negatives (times the wake word
+was actually spoken but missed) -- are the highest-value signal for fixing
+recall on your actual hardware/voice/room, since they reflect the real
+deployment conditions instead of Piper's synthetic voices.
+
+Drop them in `work/<wake_word_slug>/real_samples/` (wav/flac/mp3/ogg, any
+sample rate -- `Clips` resamples to 16kHz automatically) and re-run
+`03_build_features.py`. They get their own augmentation + feature pipeline
+(`real_features/`) and their own entry in `training_parameters.yaml` with a
+higher default sampling weight (4.0 vs. generated's 2.0, via
+`04_train.py --real-sampling-weight`) rather than being merged into the TTS
+set and diluted -- there are usually far fewer of them, so upweighting keeps
+them from getting drowned out in each training batch. If there's nothing in
+`real_samples/` yet, both scripts skip that half silently and behave exactly
+as before.
+
+With only a handful of clips, the automatic train/validation/testing split
+can fail outright (not enough clips to carve out a slice) -- that's expected
+until you've collected enough to be worth splitting; the error message says
+so explicitly rather than crashing cryptically.
 
 ## Quick start
 

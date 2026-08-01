@@ -53,8 +53,22 @@ def generated_samples_dir(wake_word: str) -> Path:
     return work_dir(wake_word) / "generated_samples"
 
 
+def real_samples_dir(wake_word: str) -> Path:
+    """Real (non-synthetic) positive recordings -- e.g. device-captured false
+    negatives you're promoting into training data. Drop 16kHz-or-not
+    wav/flac/mp3/ogg files in here; kept separate from generated_samples/ so
+    they can be weighted differently in training_parameters.yaml instead of
+    getting diluted into the much larger TTS-generated set.
+    """
+    return work_dir(wake_word) / "real_samples"
+
+
 def features_dir(wake_word: str) -> Path:
     return work_dir(wake_word) / "features"
+
+
+def real_features_dir(wake_word: str) -> Path:
+    return work_dir(wake_word) / "real_features"
 
 
 def training_config_path(wake_word: str) -> Path:
