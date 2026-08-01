@@ -99,7 +99,12 @@ def fetch_rir(force: bool) -> None:
     )
     count = 0
     for row in rir_dataset:
-        name = row["audio"]["path"].split("/")[-1]
+        # datasets' Audio feature now decodes via torchcodec's AudioDecoder,
+        # which -- unlike the old plain-dict representation -- doesn't
+        # support `["path"]` (only `["array"]`/`["sampling_rate"]`, which
+        # datasets special-cases). We don't need the original filename, just
+        # a unique one, so name clips sequentially instead.
+        name = f"rir_{count:04d}.wav"
         scipy.io.wavfile.write(
             str(out_dir / name), 16000, (row["audio"]["array"] * 32767).astype(np.int16)
         )
@@ -120,8 +125,11 @@ def _convert_dir_to_16k_wav(src_glob_dir: Path, src_pattern: str, out_dir: Path)
     ds = datasets.Dataset.from_dict({"audio": files})
     ds = ds.cast_column("audio", datasets.Audio(sampling_rate=16000))
     count = 0
-    for row in ds:
-        name = Path(row["audio"]["path"]).stem + ".wav"
+    # Zip against our own `files` list for the name instead of
+    # row["audio"]["path"] -- the AudioDecoder object datasets now returns
+    # (via torchcodec) doesn't support that key, only ["array"]/["sampling_rate"].
+    for src_path, row in zip(files, ds):
+        name = Path(src_path).stem + ".wav"
         scipy.io.wavfile.write(
             str(out_dir / name), 16000, (row["audio"]["array"] * 32767).astype(np.int16)
         )
