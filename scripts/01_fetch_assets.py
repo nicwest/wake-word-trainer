@@ -20,6 +20,7 @@ Deliberately smaller than the reference recipes:
 """
 
 import argparse
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -241,6 +242,11 @@ def main() -> None:
         help="Keep intermediate zip/mp3 downloads after extracting (default: delete them, they roughly double disk use for no benefit once the final wav/feature files exist)",
     )
     args = parser.parse_args()
+
+    if not os.environ.get("MWW_DATA_DIR"):
+        print(f"WARNING: $MWW_DATA_DIR is not set -- defaulting to {paths.data_dir()}.", file=sys.stderr)
+        print("         On a RunPod pod that's almost certainly the wrong disk -- set MWW_DATA_DIR to your Network Volume mount before running this.", file=sys.stderr)
+    print(f"Using MWW_DATA_DIR={paths.data_dir()}")
 
     fetch_piper_generator(args.force)
     fetch_rir(args.force)

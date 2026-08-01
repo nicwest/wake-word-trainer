@@ -17,6 +17,20 @@ VENV_DIR="${DATA_DIR}/venv"
 PIN_FILE="${VENV_DIR}/.requirements.sha256"
 
 mkdir -p "${DATA_DIR}"
+DATA_DIR="$(cd "${DATA_DIR}" && pwd)"  # resolve to an absolute path for the message below
+
+if [[ -z "${MWW_DATA_DIR:-}" ]]; then
+  echo "WARNING: \$MWW_DATA_DIR is not set -- defaulting to ${DATA_DIR}." >&2
+  echo "         If this is a RunPod pod, that's almost certainly the wrong disk (probably the small root/container disk, not your Network Volume) -- set MWW_DATA_DIR before running this." >&2
+fi
+echo "Using MWW_DATA_DIR=${DATA_DIR}"
+
+# pip's own download cache defaults to ~/.cache/pip on the ROOT filesystem,
+# independent of where the venv itself lives -- redirect it onto the data
+# dir too so a several-GB pip cache can't silently fill a small root disk
+# even when MWW_DATA_DIR is set correctly. (Matches RunPod's own base image
+# convention of pointing PIP_CACHE_DIR at $RP_WORKSPACE/.cache/pip.)
+export PIP_CACHE_DIR="${DATA_DIR}/.cache/pip"
 
 if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
   echo "Creating venv at ${VENV_DIR}"
