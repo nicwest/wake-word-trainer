@@ -17,59 +17,43 @@ Compared to [TaterTotterson/microWakeWord-Trainer-Nvidia-Docker](https://github.
 - the full FSD50K/AudioSet/FMA/WHAM/CHiME battery -- see "Data sources" below
   for what's used instead and why
 
-Everything that should survive between sessions -- downloaded assets and
-trained models -- lives under one directory, `$MWW_DATA_DIR`. Point that at a
-RunPod persistent Network Volume (or a synced bucket) and a fresh pod skips
-straight to training with no re-bootstrap.
+Everything that should survive between sessions -- the venv, downloaded
+assets, and trained models -- lives under one directory, `$MWW_DATA_DIR`.
+Point that at a RunPod persistent Network Volume and a fresh pod skips
+straight to training with no re-bootstrap: the pip install only happens once
+*per volume*, and every pod after that reattaches the same volume regardless
+of which host it lands on.
 
-The Python environment itself (torch + tensorflow + everything else in
-`requirements.txt`) is baked into a Docker image at build time instead of
-living on that persisted volume -- see "Docker image" below. That's the
-difference between "pull an image" and "pip install several GB" on a pod
-that's never seen this volume before.
+(We tried baking `requirements.txt` into a custom Docker image instead, so a
+pod wouldn't need to `pip install` at all. Reverted -- pulling that image on
+a RunPod host that hadn't cached it was just as slow as the install it was
+supposed to avoid, and unlike a persistent volume, a pulled image doesn't
+follow you to a different host next time. The venv-on-volume approach below
+is the one-time cost that actually stays paid.)
 
-## Docker image
+## RunPod setup
 
-```sh
-docker pull ghcr.io/nicwest/wake-word-trainer:latest
-```
-
-(The image name is `ghcr.io/<github-org-or-user>/<repo-name>` via the publish
-workflow in `.github/workflows/docker-publish.yml`, which builds on every
-push to `main` and on `v*` tags -- so it'll auto-follow if this repo is ever
-renamed or forked elsewhere.)
-
-Run it on a RunPod pod (or locally) with the data dir mounted:
+Pick a plain, small pod image -- no need for anything ML-specific, since the
+venv brings its own CUDA runtime (see "Disk footprint" below for why). RunPod's
+own `runpod/base:1.1.0-ubuntu2204` works well and pulls in seconds even on a
+fresh host. Attach a persistent Network Volume at `/workspace/data`, and set
+the pod's container start command to clone this repo and run it:
 
 ```sh
-docker run --gpus all -it \
-  -v /workspace/data:/workspace/data \
-  ghcr.io/nicwest/wake-word-trainer:latest \
-  ./train.sh "hey wild rider"
+git clone https://github.com/nicwest/wake-word-trainer.git /app && \
+cd /app && \
+MWW_DATA_DIR=/workspace/data ./train.sh "hey wild rider"
 ```
 
-Inside the image, `MWW_TRAINER_PREBUILT=1` is already set, so `train.sh`
-skips venv creation/pip install entirely and uses the image's system Python
-directly -- only `01_fetch_assets.py`'s downloads and `work/<wake_word>/`
-touch the mounted volume.
-
-To build and push it yourself instead of waiting on CI:
-
-```sh
-docker build -t ghcr.io/nicwest/wake-word-trainer:latest .
-docker push ghcr.io/nicwest/wake-word-trainer:latest
-```
-
-First push: GHCR packages default to private and linked-to-the-repo -- go to
-https://github.com/nicwest/wake-word-trainer/pkgs/container/wake-word-trainer/settings
-and set visibility to public if you want RunPod pods to pull it without a
-registry login.
+First run on a fresh volume pays the full pip install + asset download cost.
+Every subsequent pod that reattaches the same volume (even on a different
+host) skips both entirely and goes straight to sample generation.
 
 ## Layout
 
 ```
 $MWW_DATA_DIR/
-  venv/                        only created outside the Docker image (bare-metal/local use); reused if requirements.txt is unchanged
+  venv/                        one combined venv (torch + tensorflow); reused if requirements.txt is unchanged
   assets/                      shared across every wake word you train
     piper/                     LibriTTS-R generator checkpoint (~200MB)
     rir/                       MIT environmental impulse responses (~8MB)
@@ -111,26 +95,19 @@ so explicitly rather than crashing cryptically.
 
 ## Quick start
 
-Via Docker (recommended for RunPod -- see above for the full `docker run`):
-
 ```sh
-export MWW_DATA_DIR=/workspace/data   # wherever your persistent volume/bucket mount is
+export MWW_DATA_DIR=/workspace/data   # wherever your persistent volume is mounted (./data for local use)
 ./train.sh "hey wild rider"
 ```
 
-Bare-metal/local, without the image (creates a venv under `$MWW_DATA_DIR` on
-first run, same idempotent skip-if-unchanged behavior):
-
-```sh
-export MWW_DATA_DIR=./data
-./train.sh "hey wild rider"
-```
+Re-running the same command on a fresh pod (same `$MWW_DATA_DIR`) skips venv
+install and asset downloads entirely and goes straight to sample generation.
 
 Individual steps (useful for iterating on one wake word without re-touching
 shared assets):
 
 ```sh
-source scripts/00_setup_venv.sh   # no-op inside the Docker image
+source scripts/00_setup_venv.sh
 python3 scripts/01_fetch_assets.py               # once, shared by all wake words
 python3 scripts/02_generate_samples.py "hey wild rider" --max-samples 2000
 python3 scripts/03_build_features.py "hey wild rider"
@@ -155,16 +132,11 @@ entirely (fast smoke test, worse false-accept rate), or pass
 ## Disk footprint (measured, not guessed)
 
 Sizes below came from HEAD requests / HF API / PyPI metadata against the
-actual URLs this harness downloads (checked 2026-08-01), not from memory.
-
-**Docker image**: ~6-7GB pulled once (base image + baked-in requirements.txt),
-cached by the registry/datacenter -- doesn't count against `$MWW_DATA_DIR`
-at all since it never touches the volume.
-
-**`$MWW_DATA_DIR` (Docker path -- no `venv/`)**:
+actual URLs this harness downloads (checked 2026-08-01), not from memory:
 
 | Component | On-disk size |
 |---|---|
+| `venv/` (torch 2.9.x + tensorflow[and-cuda] + shared cu12 CUDA libs) | ~5-6 GB |
 | `assets/piper/` (LibriTTS-R generator checkpoint) | ~0.2 GB |
 | `assets/rir/` (MIT impulse responses, already 16kHz) | ~0.01 GB |
 | `assets/background/audioset/` (2000 clips, default) | ~0.6 GB |
@@ -172,35 +144,29 @@ at all since it never touches the volume.
 | `assets/negative_features/` (4 extracted zips, ~5.7GB compressed) | ~6-7 GB |
 | `work/<wake_word>/` (samples + features + checkpoints + output) | ~0.3-0.8 GB per phrase |
 
-**Total for shared assets + one wake word: roughly 7-8 GB.** Bare-metal/local
-use (no Docker image) adds a `venv/` of torch+tensorflow+shared cu12 CUDA
-libs, ~5-6GB, back on top of that (~13-15GB total) -- baking it into the
-image instead is most of the point of building the image.
+**Total for the shared assets + venv + one wake word: roughly 13-15 GB.**
+Give the volume real headroom beyond that: extraction briefly needs the zip
+*and* its extracted contents on disk at once (the negative-features step
+peaks around 12GB transiently before cleanup), and TF checkpoints accumulate
+during a run. **Size the RunPod volume at 30-40GB**, not 15GB.
 
-Give the volume real headroom beyond either total: extraction briefly needs
-the zip *and* its extracted contents on disk at once (the negative-features
-step peaks around 12GB transiently before cleanup), and TF checkpoints
-accumulate during a run. **Size the RunPod volume at 20-25GB with the Docker
-image (30-40GB without it)**, not the bare total above.
+The `nvidia-*-cu12` pin in `requirements.txt` matters for the venv number:
+letting torch resolve to its latest version pulls `nvidia-*-cu13` packages
+instead, which don't overlap with tensorflow's `cu12` requirement -- that
+would install two full CUDA library sets side by side (~2-3GB extra) instead
+of one shared set. It's also why the pod image itself doesn't need to be
+CUDA-flavored at all -- these pip packages bring their own CUDA runtime, the
+image just needs Python.
 
-The `nvidia-*-cu12` pin in `requirements.txt` matters for both the image and
-venv numbers: letting torch resolve to its latest version pulls
-`nvidia-*-cu13` packages instead, which don't overlap with tensorflow's
-`cu12` requirement -- that would install two full CUDA library sets side by
-side (~2-3GB extra) instead of one shared set.
+## Alternative: bucket sync instead of a Network Volume
 
-## RunPod persistence
-
-Everything reusable is `$MWW_DATA_DIR`. Two ways to keep it warm between
-sessions -- pick based on whether you want to stay in one datacenter or shop
-for GPU availability each time:
-
-- **Network Volume**: create one, mount it at `/workspace/data` on every pod,
-  set `MWW_DATA_DIR=/workspace/data`. No sync step, ever. Locks you to that
-  volume's datacenter and one pod at a time.
-- **Bucket sync**: `rclone sync` `$MWW_DATA_DIR` to/from R2/B2/S3 at the start
-  and end of each pod session -- pod-to-bucket only, so it runs at datacenter
-  speed regardless of your home connection.
+Network Volumes lock you to one RunPod datacenter (and one pod at a time),
+which limits which GPUs you can rent. If that matters more than the
+convenience, sync `$MWW_DATA_DIR` to a bucket instead: `rclone sync` it to
+R2/B2/S3 at the start and end of each pod session. That's pod-to-bucket only
+(datacenter-speed transfer, not your home connection), but it does mean every
+session pays a sync delay proportional to `$MWW_DATA_DIR`'s size -- worth it
+only if GPU availability is the bigger constraint.
 
 ## Known gaps / next steps
 
@@ -210,14 +176,10 @@ for GPU availability each time:
 - No adversarial/similar-phrase negative generation (openWakeWord does this
   in the full microWakeWord recipe). Worth adding if false-accepts on
   phonetically similar words are a problem.
-- Not tested end-to-end yet -- this was built from reading the reference
-  notebook/source, not by running a full GPU training pass. Treat the first
-  RunPod run as the real integration test.
-- First real RunPod attempt hit `nvidia-container-cli: requirement error:
-  unsatisfied condition: cuda>=12.8` -- the original `cuda1281`-tagged base
-  image baked in a driver-version gate this pod's host didn't satisfy, even
-  though nothing in the image uses system CUDA. Fixed by switching to the
-  plain (non-cuda-tagged) `runpod/base:1.1.0-ubuntu2204`; see the comment at
-  the top of `Dockerfile`. Not yet re-verified on a pod.
-- Training itself (the actual GPU run once the container starts) is still
-  unverified end-to-end.
+- Not tested end-to-end yet. Two real RunPod attempts so far surfaced real
+  bugs before training ever started: a dead AudioSet URL, a CUDA-driver-gate
+  failure from an earlier Docker-image approach (since reverted -- see the
+  note in `scripts/00_setup_venv.sh`), and a slow image pull that prompted
+  dropping the custom-image idea entirely. The actual GPU training run is
+  still unverified end-to-end -- treat the next RunPod attempt as the real
+  integration test.

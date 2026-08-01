@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
 # Creates (or reuses) the single project venv inside $MWW_DATA_DIR, so a pod
-# that mounts the same persistent volume/bucket sync never re-installs torch
-# and tensorflow from scratch.
+# that mounts the same persistent volume never re-installs torch and
+# tensorflow from scratch -- the install only happens once per volume, and
+# every pod after that just reattaches it and skips straight to training.
 #
-# Skipped entirely when MWW_TRAINER_PREBUILT=1 (set by the Dockerfile): in
-# that case requirements.txt was already installed into the image's system
-# Python at build time, so there's nothing to do here -- `python3`/`pip`
-# already resolve to an environment with everything installed.
+# (We previously tried baking requirements.txt into a custom Docker image
+# instead. Reverted: the image pull cost on a fresh RunPod host wasn't
+# actually smaller than a pip install, and unlike a persistent volume, a
+# pulled image doesn't stick around when your pod lands on a different host
+# next time. A venv on the volume is the one-time cost we actually wanted.)
 set -euo pipefail
-
-if [[ "${MWW_TRAINER_PREBUILT:-0}" == "1" ]]; then
-  echo "MWW_TRAINER_PREBUILT=1: dependencies are baked into the image, skipping venv setup."
-  return 0 2>/dev/null || exit 0
-fi
 
 ROOTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_DIR="${MWW_DATA_DIR:-./data}"
