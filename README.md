@@ -31,20 +31,20 @@ that's never seen this volume before.
 ## Docker image
 
 ```sh
-docker pull ghcr.io/<owner>/mww-trainer:latest
+docker pull ghcr.io/nicwest/wake-word-trainer:latest
 ```
 
-(Swap `<owner>` for whoever's GitHub repo this ends up in -- the image name
-is `ghcr.io/<github-org-or-user>/<repo-name>` via the publish workflow in
-`.github/workflows/docker-publish.yml`, which builds on every push to `main`
-and on `v*` tags.)
+(The image name is `ghcr.io/<github-org-or-user>/<repo-name>` via the publish
+workflow in `.github/workflows/docker-publish.yml`, which builds on every
+push to `main` and on `v*` tags -- so it'll auto-follow if this repo is ever
+renamed or forked elsewhere.)
 
 Run it on a RunPod pod (or locally) with the data dir mounted:
 
 ```sh
 docker run --gpus all -it \
   -v /workspace/data:/workspace/data \
-  ghcr.io/<owner>/mww-trainer:latest \
+  ghcr.io/nicwest/wake-word-trainer:latest \
   ./train.sh "hey wild rider"
 ```
 
@@ -56,13 +56,14 @@ touch the mounted volume.
 To build and push it yourself instead of waiting on CI:
 
 ```sh
-docker build -t ghcr.io/<owner>/mww-trainer:latest .
-docker push ghcr.io/<owner>/mww-trainer:latest
+docker build -t ghcr.io/nicwest/wake-word-trainer:latest .
+docker push ghcr.io/nicwest/wake-word-trainer:latest
 ```
 
 First push: GHCR packages default to private and linked-to-the-repo -- go to
-the package's settings on GitHub and set visibility to public if you want
-RunPod pods to pull it without a registry login.
+https://github.com/nicwest/wake-word-trainer/pkgs/container/wake-word-trainer/settings
+and set visibility to public if you want RunPod pods to pull it without a
+registry login.
 
 ## Layout
 
