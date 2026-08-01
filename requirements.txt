@@ -10,6 +10,12 @@
 # fighting over the GPU in the same venv).
 torch<2.10,>=2.9
 torchaudio
+# `datasets` (below) needs torchcodec to encode/decode Audio-feature columns
+# (used by 01_fetch_assets.py streaming MIT RIR / AudioSet from HF). Version-
+# locked to torch like torchaudio -- torchcodec's own compatibility table
+# (github.com/meta-pytorch/torchcodec) pairs 0.9.x with torch 2.9.x, matching
+# our pin above. Bump both together if the torch pin ever moves.
+torchcodec<0.10,>=0.9
 piper-sample-generator
 # NOTE: piper-sample-generator depends on plain `webrtcvad` (compiled from
 # source) while microwakeword depends on `webrtcvad-wheels` (prebuilt). Both
