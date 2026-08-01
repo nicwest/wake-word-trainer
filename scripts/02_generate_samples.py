@@ -30,8 +30,11 @@ def main() -> None:
     args = parser.parse_args()
 
     generator = Path(args.generator) if args.generator else paths.piper_dir() / "en_US-libritts_r-medium.pt"
+    generator_config = generator.with_name(generator.name + ".json")
     if not generator.exists():
         sys.exit(f"Generator checkpoint not found at {generator}. Run 01_fetch_assets.py first.")
+    if not generator_config.exists():
+        sys.exit(f"Generator config not found at {generator_config}. Run 01_fetch_assets.py (--force to redownload) first.")
 
     src_dir = paths.piper_sample_generator_src_dir()
     if not src_dir.exists():

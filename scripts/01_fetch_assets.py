@@ -37,6 +37,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from mww_trainer import paths  # noqa: E402
 
 PIPER_GENERATOR_URL = "https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt"
+# piper_sample_generator expects a "<model>.json" config (phoneme/speaker ID
+# maps, sample rate, etc.) sitting next to the .pt checkpoint -- same pairing
+# convention as Piper's .onnx/.onnx.json voices. It's static, not derived
+# from any particular run, and ships in the repo itself; fetch it directly
+# at the same pinned tag as the source clone below rather than depending on
+# fetch ordering between the two.
+PIPER_GENERATOR_CONFIG_URL = "https://raw.githubusercontent.com/rhasspy/piper-sample-generator/v3.2.0/models/en_US-libritts_r-medium.pt.json"
 
 PIPER_SAMPLE_GENERATOR_REPO = "https://github.com/rhasspy/piper-sample-generator.git"
 PIPER_SAMPLE_GENERATOR_REF = "v3.2.0"  # matches the PyPI version this was verified against
@@ -85,11 +92,14 @@ def mark_done(dir_: Path) -> None:
 def fetch_piper_generator(force: bool) -> None:
     out_dir = paths.piper_dir()
     dest = out_dir / "en_US-libritts_r-medium.pt"
-    if dest.exists() and not force:
+    config_dest = out_dir / "en_US-libritts_r-medium.pt.json"
+    if dest.exists() and config_dest.exists() and not force:
         print(f"[piper] already have {dest}")
         return
     print("[piper] downloading generator checkpoint (~75 MB)")
     download(PIPER_GENERATOR_URL, dest)
+    print("[piper] downloading generator config")
+    download(PIPER_GENERATOR_CONFIG_URL, config_dest)
 
 
 def fetch_piper_sample_generator_src(force: bool) -> None:
