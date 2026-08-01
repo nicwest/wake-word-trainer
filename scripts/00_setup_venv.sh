@@ -45,7 +45,15 @@ REQ_HASH="$(sha256sum "${ROOTDIR}/requirements.txt" | awk '{print $1}')"
 if [[ ! -f "${PIN_FILE}" ]] || [[ "$(cat "${PIN_FILE}")" != "${REQ_HASH}" ]]; then
   echo "Installing/upgrading requirements"
   pip install -U pip setuptools wheel
-  pip install -r "${ROOTDIR}/requirements.txt"
+  # --upgrade matters here, not just on first install: an unpinned
+  # requirement line is "satisfied" by whatever's already installed, even a
+  # stale version pulled in earlier by a *different* package's hard pin that
+  # has since been removed from requirements.txt. Without --upgrade that
+  # stale version silently survives every future reinstall. Hit this for
+  # real with audiomentations (piper-sample-generator used to pin it to
+  # 0.33.0; after removing that dependency, plain `pip install -r` left
+  # 0.33.0 in place since our own line was just "audiomentations").
+  pip install --upgrade -r "${ROOTDIR}/requirements.txt"
   echo "${REQ_HASH}" > "${PIN_FILE}"
 else
   echo "Reusing existing venv (requirements.txt unchanged since last install)"

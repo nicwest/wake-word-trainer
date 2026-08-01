@@ -44,7 +44,15 @@ webrtcvad
 # that live tree via Python's implicit namespace packages, which sidesteps
 # find_packages() entirely since nothing gets copied into a wheel manifest.
 -e git+https://github.com/kahrendt/microWakeWord.git#egg=microwakeword
-audiomentations
+# >=0.35.0: microwakeword's Augmentation class uses AddColorNoise, added in
+# that release. Needs an actual floor, not just "audiomentations" unpinned --
+# pip won't upgrade an already-installed version that satisfies an unpinned
+# requirement line, so a stale older version (e.g. pulled in transitively by
+# something else's hard pin earlier) silently sticks around across reinstalls
+# even after that something else is removed. Confirmed hitting exactly this:
+# 0.33.0 (piper-sample-generator's old pin, before we stopped pip-installing
+# it) lacks AddColorNoise entirely.
+audiomentations>=0.35.0
 audio_metadata
 datasets
 mmap_ninja
