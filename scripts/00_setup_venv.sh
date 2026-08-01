@@ -54,6 +54,15 @@ if [[ ! -f "${PIN_FILE}" ]] || [[ "$(cat "${PIN_FILE}")" != "${REQ_HASH}" ]]; th
   # 0.33.0; after removing that dependency, plain `pip install -r` left
   # 0.33.0 in place since our own line was just "audiomentations").
   pip install --upgrade -r "${ROOTDIR}/requirements.txt"
+  # Belt-and-suspenders cleanup: the PyPI piper-sample-generator package
+  # (deliberately NOT in requirements.txt -- see the note there) may still
+  # be lingering from before that switch. `pip install -r` never removes a
+  # package that's no longer listed, and its stale audiomentations==0.33.0
+  # pin causes a spurious resolver conflict warning against our own
+  # audiomentations>=0.35.0 on every reinstall. Not otherwise used (
+  # 02_generate_samples.py's PYTHONPATH points at the git clone instead) --
+  # safe to remove if present, harmless if not.
+  pip uninstall -y piper-sample-generator >/dev/null 2>&1 || true
   echo "${REQ_HASH}" > "${PIN_FILE}"
 else
   echo "Reusing existing venv (requirements.txt unchanged since last install)"
