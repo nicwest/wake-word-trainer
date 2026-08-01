@@ -3,13 +3,22 @@
 # straight to "pull image, mount data volume, train" -- no pip install wait
 # on the very first boot in a datacenter.
 #
-# Base: runpod/base ships Python 3.9-3.13 (3.12 symlinked as default),
-# build-essential/cmake/ffmpeg, and uv, on top of CUDA 12.8.1/Ubuntu 22.04.
-# We don't need the CUDA toolkit for anything ourselves (torch/tensorflow
-# bring their own pip-installed CUDA runtime libs, see requirements.txt) but
-# RunPod's GPU pods expect a cuda-tagged base for driver passthrough to work
-# cleanly.
-FROM runpod/base:1.1.0-cuda1281-ubuntu2204
+# Base: runpod/base ships Python 3.9-3.13 (3.12 symlinked as default) and
+# build-essential/cmake/ffmpeg/uv, on top of plain Ubuntu 22.04 -- NOT a
+# cuda-tagged variant. We don't need the CUDA toolkit for anything ourselves
+# (torch/tensorflow bring their own pip-installed CUDA runtime libs, see
+# requirements.txt), and RunPod's own build config
+# (github.com/runpod/containers official-templates/base/docker-bake.hcl)
+# shows the cuda-tagged variants are built FROM nvidia/cuda:*-cudnn-devel-*,
+# which bakes in a hard `NVIDIA_REQUIRE_CUDA=cuda>=X.Y` driver-version gate
+# checked by the nvidia-container-cli prestart hook at container start.
+# Learned this the hard way: a cuda1281-tagged base refused to start on a
+# pod whose host driver didn't satisfy cuda>=12.8, even though nothing in
+# this image actually uses the system CUDA toolkit. Plain ubuntu2204 has no
+# such gate -- GPU access still works via the standard device/driver-library
+# passthrough RunPod sets up at the container-runtime level, independent of
+# whether the image is nvidia/cuda-derived.
+FROM runpod/base:1.1.0-ubuntu2204
 
 WORKDIR /app
 

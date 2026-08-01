@@ -213,8 +213,11 @@ for GPU availability each time:
 - Not tested end-to-end yet -- this was built from reading the reference
   notebook/source, not by running a full GPU training pass. Treat the first
   RunPod run as the real integration test.
-- The Docker image hasn't been built or run yet either (verified the base
-  image's contents -- Python 3.12/pip/build-essential/ffmpeg all present --
-  from RunPod's own Dockerfile source, but haven't done an actual `docker
-  build` here). First build is worth watching in case something in
-  requirements.txt needs a system package the base image doesn't have.
+- First real RunPod attempt hit `nvidia-container-cli: requirement error:
+  unsatisfied condition: cuda>=12.8` -- the original `cuda1281`-tagged base
+  image baked in a driver-version gate this pod's host didn't satisfy, even
+  though nothing in the image uses system CUDA. Fixed by switching to the
+  plain (non-cuda-tagged) `runpod/base:1.1.0-ubuntu2204`; see the comment at
+  the top of `Dockerfile`. Not yet re-verified on a pod.
+- Training itself (the actual GPU run once the container starts) is still
+  unverified end-to-end.
