@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .DS_Store
 *.egg-info/
+
+# Personal convenience script -- bakes in a local Mac volume path, not
+# part of the portable harness.
+scripts/upload_samples.sh
