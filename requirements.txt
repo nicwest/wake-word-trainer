@@ -1,0 +1,36 @@
+# One combined venv for the whole pipeline (sample generation + training).
+# No separate UI/STT/auto-training stack, no separate venv per Python version.
+
+# --- sample generation (piper-sample-generator) ---
+# Pinned to a pre-2.10 release: torch>=2.10 switched its bundled CUDA
+# libraries from the nvidia-*-cu12 packages to nvidia-*-cu13, which do NOT
+# overlap with tensorflow[and-cuda]'s cu12 requirement below. Staying under
+# 2.10 means pip installs ONE shared set of cu12 libraries for both
+# frameworks instead of two (saves ~2-3GB and avoids two CUDA runtimes
+# fighting over the GPU in the same venv).
+torch<2.10,>=2.9
+torchaudio
+piper-sample-generator
+# NOTE: piper-sample-generator depends on plain `webrtcvad` (compiled from
+# source) while microwakeword depends on `webrtcvad-wheels` (prebuilt). Both
+# provide the same `webrtcvad` import name; pip will install both
+# distributions and one will silently overwrite the other's files in
+# site-packages. Harmless in practice (same upstream API) but not clean.
+
+# --- microWakeWord training (not on PyPI, installed straight from git) ---
+microwakeword @ git+https://github.com/kahrendt/microWakeWord.git
+audiomentations
+audio_metadata
+datasets
+mmap_ninja
+numpy>=2.0
+pymicro-features
+pyyaml
+tensorflow[and-cuda]>=2.18
+webrtcvad-wheels
+ai-edge-litert
+
+# --- asset fetching helpers ---
+requests
+tqdm
+scipy
