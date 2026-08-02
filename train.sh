@@ -5,13 +5,21 @@
 # just picks up where it left off.
 #
 # Usage:
-#   MWW_DATA_DIR=/workspace/data ./train.sh "hey wild rider" [--skip-fetch] [--skip-generate] [--skip-features]
+#   MWW_DATA_DIR=/workspace/data ./train.sh "hey wild rider" [--skip-fetch] [--skip-generate] [--skip-features] [--force-uploaded]
+#
+# After uploading new real_samples/false_positive_samples with
+# upload_samples.sh, the fast path to retrain on them is:
+#   ./train.sh "hey wild rider" --skip-fetch --skip-generate --force-uploaded
+# --force-uploaded rebuilds only the small real_samples/false_positive_samples
+# features (03_build_features.py normally skips already-built features
+# entirely, so newly uploaded files are otherwise silently ignored) without
+# also redoing the much larger generated_samples set.
 set -euo pipefail
 
 ROOTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 \"<wake word phrase>\" [--skip-fetch] [--skip-generate] [--skip-features]" >&2
+  echo "Usage: $0 \"<wake word phrase>\" [--skip-fetch] [--skip-generate] [--skip-features] [--force-uploaded]" >&2
   exit 1
 fi
 
@@ -21,11 +29,13 @@ shift
 SKIP_FETCH=false
 SKIP_GENERATE=false
 SKIP_FEATURES=false
+FORCE_UPLOADED=false
 for arg in "$@"; do
   case "$arg" in
     --skip-fetch) SKIP_FETCH=true ;;
     --skip-generate) SKIP_GENERATE=true ;;
     --skip-features) SKIP_FEATURES=true ;;
+    --force-uploaded) FORCE_UPLOADED=true ;;
     *) echo "Unknown flag: $arg" >&2; exit 1 ;;
   esac
 done
@@ -47,7 +57,11 @@ if [[ "${SKIP_GENERATE}" == false ]]; then
 fi
 
 if [[ "${SKIP_FEATURES}" == false ]]; then
-  python3 "${ROOTDIR}/scripts/03_build_features.py" "${WAKE_WORD}"
+  if [[ "${FORCE_UPLOADED}" == true ]]; then
+    python3 "${ROOTDIR}/scripts/03_build_features.py" "${WAKE_WORD}" --force-uploaded
+  else
+    python3 "${ROOTDIR}/scripts/03_build_features.py" "${WAKE_WORD}"
+  fi
 fi
 
 python3 "${ROOTDIR}/scripts/04_train.py" "${WAKE_WORD}" --training-steps "${TRAINING_STEPS}"

@@ -98,6 +98,17 @@ can fail outright (not enough clips to carve out a slice) -- that's expected
 until you've collected enough to be worth splitting; the error message says
 so explicitly rather than crashing cryptically.
 
+**Fast path to retrain after uploading new samples** (either kind, real or
+false-positive): re-running `03_build_features.py`/`train.sh` normally skips
+already-built features entirely, so newly uploaded files are silently
+ignored unless you force a rebuild. `train.sh`'s `--force-uploaded` does
+that for just the small real_samples/false_positive_samples features,
+without also redoing the much larger (and slower) generated_samples set:
+
+```sh
+./train.sh "hey wild rider" --skip-fetch --skip-generate --force-uploaded
+```
+
 ### Captured false positives (false wakes)
 
 The mirror-image case: clips where the model triggered but the wake word

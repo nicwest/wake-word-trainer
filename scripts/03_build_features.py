@@ -126,7 +126,12 @@ def main() -> None:
     parser.add_argument("--augmentation-duration-s", type=float, default=3.2)
     parser.add_argument("--background-min-snr-db", type=int, default=-5)
     parser.add_argument("--background-max-snr-db", type=int, default=10)
-    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--force", action="store_true", help="Force-rebuild all three feature sets, including the large generated_samples one")
+    parser.add_argument(
+        "--force-uploaded",
+        action="store_true",
+        help="Force-rebuild only real_samples/false_positive_samples features (generated_samples still cached unless --force too) -- use after uploading new captures with upload_samples.sh",
+    )
     args = parser.parse_args()
 
     if not paths.microwakeword_src_dir().exists():
@@ -137,15 +142,16 @@ def main() -> None:
         sys.exit(f"No generated samples in {generated_dir}. Run 02_generate_samples.py first.")
 
     augmenter = build_augmenter(args.augmentation_duration_s, args.background_min_snr_db, args.background_max_snr_db)
+    force_uploaded = args.force or args.force_uploaded
 
     build_features("generated", generated_dir, paths.features_dir(args.wake_word), augmenter, args.force)
-    build_features("real", paths.real_samples_dir(args.wake_word), paths.real_features_dir(args.wake_word), augmenter, args.force)
+    build_features("real", paths.real_samples_dir(args.wake_word), paths.real_features_dir(args.wake_word), augmenter, force_uploaded)
     build_features(
         "false_positive",
         paths.false_positive_samples_dir(args.wake_word),
         paths.false_positive_features_dir(args.wake_word),
         augmenter,
-        args.force,
+        force_uploaded,
     )
 
 
