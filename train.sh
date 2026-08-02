@@ -31,7 +31,7 @@ for arg in "$@"; do
 done
 
 export MWW_DATA_DIR="${MWW_DATA_DIR:-./data}"
-: "${MAX_SAMPLES:=1000}"
+: "${MAX_SAMPLES:=3000}"
 : "${TRAINING_STEPS:=10000}"
 
 echo "== data dir: ${MWW_DATA_DIR} =="
