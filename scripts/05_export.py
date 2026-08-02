@@ -44,8 +44,8 @@ def pick_cutoff(points, max_faph: float) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wake_word")
-    parser.add_argument("--author", default="")
-    parser.add_argument("--website", default="")
+    parser.add_argument("--author", default="nic and claude")
+    parser.add_argument("--website", default="http://home.arpa")
     parser.add_argument("--max-faph", type=float, default=2.0, help="Max acceptable ambient false-accepts/hour when picking the cutoff")
     parser.add_argument(
         "--tensor-arena-size",
