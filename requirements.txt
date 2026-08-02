@@ -65,7 +65,19 @@ piper-tts==1.3.0
 # stopped installing it) lacks AddColorNoise entirely.
 audiomentations>=0.35.0
 audio_metadata
-datasets
+# >=5.0: left unpinned, uv's resolver backtracked all the way down to
+# 2.14.4 (a 2023-era release) rather than the current 5.0.1 -- reproduced
+# and confirmed via `uv pip compile`, not a guess. 2.14.4 still uses the
+# pyarrow API `pa.PyExtensionType`, which newer pyarrow releases removed;
+# with pyarrow itself unpinned, uv separately resolved a current pyarrow
+# (25.0.0), landing on a combination that's internally inconsistent even
+# though both packages' *declared* version ranges are technically
+# satisfied -- AttributeError: module 'pyarrow' has no attribute
+# 'PyExtensionType' at import time. 5.0.1 requires pyarrow>=21.0.0 and
+# its own code was confirmed (read directly) to use the current
+# pa.ExtensionType API instead, so pinning the floor here forces a
+# consistent pairing rather than leaving it to chance.
+datasets>=5.0
 mmap_ninja
 numpy>=2.0
 pymicro-features
