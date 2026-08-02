@@ -27,7 +27,30 @@ NEGATIVE_FEATURE_WEIGHTS = {
 }
 
 
-def build_config(wake_word: str, training_steps: int, real_sampling_weight: float, false_positive_sampling_weight: float) -> dict:
+def build_config(
+    wake_word: str,
+    training_steps: int,
+    real_sampling_weight: float,
+    real_penalty_weight: float,
+    false_positive_sampling_weight: float,
+    false_positive_penalty_weight: float,
+) -> dict:
+    # Two different dials, easy to conflate:
+    #   sampling_weight -- how often a set fills a batch slot (a mix ratio).
+    #     High values on a SMALL set (real/false_positive, tens of clips vs.
+    #     thousands in the shared negative sets) mean the model rehearses
+    #     that same narrow pool over and over relative to everything else --
+    #     that's overfitting-to-a-few-clips, not "generalizing better", and
+    #     is what regressed recall when false_positive_sampling_weight was
+    #     pushed to 15 (see git history). Keep these modest, roughly
+    #     reflecting how much real diversity each set actually has.
+    #   penalty_weight -- how much a MISTAKE on that set costs in the loss,
+    #     independent of how often it's sampled. This is the more direct way
+    #     to say "care more about getting these specific examples right"
+    #     without forcing more repetition. (There's also a much bigger
+    #     structural asymmetry already baked in below: negative_class_weight
+    #     20 vs positive_class_weight 1, applied globally regardless of
+    #     which set an example came from.)
     features = [
         {
             "features_dir": str(paths.features_dir(wake_word)),
@@ -43,14 +66,14 @@ def build_config(wake_word: str, training_steps: int, real_sampling_weight: floa
     if real_features_dir.exists() and any(real_features_dir.glob("*/wakeword_mmap")):
         # Real (non-synthetic) positives -- e.g. promoted false-negative
         # captures -- kept as their own weighted feature set rather than
-        # merged into the TTS set, so they can be upweighted: there are
-        # usually far fewer of them, but they're the most representative
-        # signal for real-world recall.
+        # merged into the TTS set, so they can be weighted differently:
+        # there are usually far fewer of them, but they're the most
+        # representative signal for real-world recall.
         features.append(
             {
                 "features_dir": str(real_features_dir),
                 "sampling_weight": real_sampling_weight,
-                "penalty_weight": 1.0,
+                "penalty_weight": real_penalty_weight,
                 "truth": True,
                 "truncation_strategy": "truncate_start",
                 "type": "mmap",
@@ -63,13 +86,14 @@ def build_config(wake_word: str, training_steps: int, real_sampling_weight: floa
     if false_positive_features_dir.exists() and any(false_positive_features_dir.glob("*/wakeword_mmap")):
         # Captured false wakes -- negative examples, and the highest-value
         # kind: hand-picked instances of exactly what this model gets wrong,
-        # not generic negative audio. Weighted above the shared
-        # negative_features/ sets below for that reason.
+        # not generic negative audio. penalty_weight up (mistakes on these
+        # cost more), sampling_weight kept modest (this set is tiny --
+        # rehearsing it too often is how we regressed recall last time).
         features.append(
             {
                 "features_dir": str(false_positive_features_dir),
                 "sampling_weight": false_positive_sampling_weight,
-                "penalty_weight": 1.0,
+                "penalty_weight": false_positive_penalty_weight,
                 "truth": False,
                 "truncation_strategy": "random",
                 "type": "mmap",
@@ -121,11 +145,20 @@ def main() -> None:
     parser.add_argument("--training-steps", type=int, default=10000)
     parser.add_argument("--restore-checkpoint", type=int, default=1, help="Resume from checkpoint if the train dir already has one")
     parser.add_argument("--real-sampling-weight", type=float, default=4.0, help="Sampling weight for real_samples/ features, if present (higher than generated's 2.0 -- there are usually far fewer of them)")
-    parser.add_argument("--false-positive-sampling-weight", type=float, default=15.0, help="Sampling weight for false_positive_samples/ features, if present (higher than the shared negative sets -- hand-picked hard negatives specific to this model)")
+    parser.add_argument("--real-penalty-weight", type=float, default=2.0, help="Loss penalty weight for real_samples/ mistakes, if present")
+    parser.add_argument("--false-positive-sampling-weight", type=float, default=4.0, help="Sampling weight for false_positive_samples/ features, if present. Keep modest -- this set is small (tens of clips), and a high value means the model rehearses it disproportionately rather than generalizing (regressed recall at 15.0, see git history)")
+    parser.add_argument("--false-positive-penalty-weight", type=float, default=3.0, help="Loss penalty weight for false_positive_samples/ mistakes, if present -- the more direct 'care about these' dial, without the overfitting risk of a high sampling weight")
     parser.add_argument("--config-only", action="store_true", help="Only write the yaml, don't launch training")
     args = parser.parse_args()
 
-    config = build_config(args.wake_word, args.training_steps, args.real_sampling_weight, args.false_positive_sampling_weight)
+    config = build_config(
+        args.wake_word,
+        args.training_steps,
+        args.real_sampling_weight,
+        args.real_penalty_weight,
+        args.false_positive_sampling_weight,
+        args.false_positive_penalty_weight,
+    )
     config_path = paths.training_config_path(args.wake_word)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     with open(config_path, "w") as f:

@@ -18,7 +18,7 @@ from mww_trainer import paths  # noqa: E402
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wake_word", help='Phrase to synthesize, e.g. "hey wild rider"')
-    parser.add_argument("--max-samples", type=int, default=1000)
+    parser.add_argument("--max-samples", type=int, default=3000)
     parser.add_argument("--batch-size", type=int, default=50, help="Raise this on a GPU; 1-2 on CPU")
     parser.add_argument("--max-speakers", type=int, default=800, help="LibriTTS-R has 904 speakers; the last few are noisy")
     parser.add_argument(

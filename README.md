@@ -104,16 +104,33 @@ The mirror-image case: clips where the model triggered but the wake word
 wasn't actually said. These are **negative** examples -- the same idea as
 Tater's "mark as False wake" review flow, hand-picked instances of exactly
 what this model gets wrong, which makes them the highest-value negative
-signal available (more so than the generic shared `negative_features/`
-sets, which is why they default to a higher sampling weight).
+signal available.
 
 Drop them in `work/<wake_word_slug>/false_positive_samples/` and re-run
 `03_build_features.py` -- same format rules as `real_samples/`. They get
 their own feature pipeline (`false_positive_features/`) and their own
-`training_parameters.yaml` entry with `truth: false` and a default sampling
-weight of 15.0 (vs. 10.0/5.0 for the shared negative sets, via
-`04_train.py --false-positive-sampling-weight`). Skipped silently if empty,
-same as `real_samples/`.
+`training_parameters.yaml` entry with `truth: false`. Skipped silently if
+empty, same as `real_samples/`.
+
+**`sampling_weight` vs `penalty_weight`** -- easy to conflate, and worth
+understanding before tuning either:
+- `sampling_weight` controls how often a set fills a training-batch slot (a
+  mix ratio across all feature sets). `real_samples/`/`false_positive_samples/`
+  are typically tens of clips, tiny next to the shared `negative_features/`
+  sets (thousands). Pushing sampling_weight high on a small set doesn't
+  teach general robustness -- it makes the model rehearse that narrow pool
+  disproportionately, which looks like overfitting. Confirmed this
+  regressing recall in practice at `false_positive_sampling_weight=15`
+  (default is `4.0`, comparable to `no_speech`'s `5.0` -- see git history).
+- `penalty_weight` controls how much a *mistake* on that set costs in the
+  loss, independent of sampling frequency -- the more direct "care about
+  these specifically" dial. Defaults: `real_samples/` at `2.0`,
+  `false_positive_samples/` at `3.0` (both `1.0` elsewhere), via
+  `04_train.py --real-penalty-weight`/`--false-positive-penalty-weight`.
+- Underneath both, `negative_class_weight: 20` vs `positive_class_weight: 1`
+  already penalizes *any* negative-class mistake 20x more than a positive
+  one, globally, regardless of which set it came from -- the dominant force
+  in the whole config, bigger than any individual set's weights.
 
 ## Quick start
 
