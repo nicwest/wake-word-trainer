@@ -74,7 +74,13 @@ if [[ ! -f "${PIN_FILE}" ]] || [[ "$(cat "${PIN_FILE}")" != "${REQ_HASH}" ]]; th
   #     run -- `--upgrade` alone wouldn't fix this, since it's a no-op for a
   #     package that's already "satisfied" even if its files got clobbered
   #     by something else afterwards.
-  uv pip uninstall piper-sample-generator webrtcvad webrtcvad-wheels >/dev/null 2>&1 || true
+  #   - microwakeword (editable git install): pre-dates the pip->uv
+  #     migration, when requirements.txt still had `-e git+URL#egg=...`. A
+  #     venv created before that migration will have this leftover; sys.path
+  #     ordering should make the new git-clone-on-PYTHONPATH approach win
+  #     regardless, but no reason to leave stale, potentially-shadowing
+  #     package metadata lying around when it's this cheap to remove.
+  uv pip uninstall piper-sample-generator webrtcvad webrtcvad-wheels microwakeword >/dev/null 2>&1 || true
 
   # --upgrade matters here too, not just on first install: an unpinned
   # requirement line is "satisfied" by whatever's already installed, even a
