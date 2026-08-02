@@ -45,7 +45,13 @@ export UV_CACHE_DIR="${DATA_DIR}/.cache/uv"
 
 if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
   echo "Creating venv at ${VENV_DIR}"
-  uv venv "${VENV_DIR}"
+  # --python 3.10 is required, not cosmetic: uv's own Python-discovery
+  # picked 3.12 by default on a RunPod pod (confirmed for real), unlike
+  # `python3 -m venv`'s old incidental PATH-based resolution which always
+  # landed on 3.10 there. audiomentations -> librosa -> numba -> llvmlite
+  # 0.36.0 only builds on Python <3.10, so 3.12 fails outright at install
+  # time. Pin explicitly instead of trusting whatever uv would pick.
+  uv venv "${VENV_DIR}" --python 3.10
 fi
 
 # shellcheck disable=SC1091
