@@ -18,9 +18,9 @@ Deliberately smaller than the reference recipes:
     no_speech). These are already-augmented spectrograms, not raw audio, and
     there's no smaller substitute without giving up false-accept robustness.
 
-Also clones piper-sample-generator's source (not the PyPI package -- see
-requirements.txt) so 02_generate_samples.py can run it with the sibling
-piper_train package PyPI never bundles.
+Also clones piper-sample-generator's and microWakeWord's source directly
+(not pip/uv installed -- see requirements.txt) so downstream scripts can run
+them with the subpackages a normal wheel build silently drops.
 """
 
 import argparse
@@ -47,6 +47,14 @@ PIPER_GENERATOR_CONFIG_URL = "https://raw.githubusercontent.com/rhasspy/piper-sa
 
 PIPER_SAMPLE_GENERATOR_REPO = "https://github.com/rhasspy/piper-sample-generator.git"
 PIPER_SAMPLE_GENERATOR_REF = "v3.2.0"  # matches the PyPI version this was verified against
+
+MICROWAKEWORD_REPO = "https://github.com/kahrendt/microWakeWord.git"
+# No proper release tags upstream (only old training-run artifact tags like
+# "okay_nabu_20241226.3", all pointing at the same commit as HEAD anyway) --
+# pin to that commit SHA directly for reproducibility. Full clone + checkout
+# rather than a shallow --branch clone since git generally can't shallow-fetch
+# an arbitrary commit SHA the way it can a named ref; the repo is tiny (~1MB).
+MICROWAKEWORD_REF = "4665173cd35f1cff9a61e06fc427f124766c488e"
 
 # Streamed via the `datasets` library rather than a hardcoded file URL: the
 # upstream repo has reorganized its raw file layout before (tar shards ->
@@ -123,6 +131,26 @@ def fetch_piper_sample_generator_src(force: bool) -> None:
         ],
         check=True,
     )
+    mark_done(out_dir)
+
+
+def fetch_microwakeword_src(force: bool) -> None:
+    # Not pip/uv installed -- see the note in requirements.txt and
+    # mww_trainer.paths.microwakeword_src_dir's docstring. Git clone instead,
+    # pinned to a commit, so 03_build_features.py/04_train.py can put it on
+    # sys.path/PYTHONPATH and get microwakeword.audio, which a real wheel
+    # build silently drops.
+    out_dir = paths.microwakeword_src_dir()
+    if is_done(out_dir) and not force:
+        print(f"[microwakeword-src] already have {out_dir}")
+        return
+    if out_dir.exists():
+        import shutil
+
+        shutil.rmtree(out_dir)
+    print(f"[microwakeword-src] cloning {MICROWAKEWORD_REPO}@{MICROWAKEWORD_REF}")
+    subprocess.run(["git", "clone", MICROWAKEWORD_REPO, str(out_dir)], check=True)
+    subprocess.run(["git", "-C", str(out_dir), "checkout", "--quiet", MICROWAKEWORD_REF], check=True)
     mark_done(out_dir)
 
 
@@ -292,6 +320,7 @@ def main() -> None:
 
     fetch_piper_generator(args.force)
     fetch_piper_sample_generator_src(args.force)
+    fetch_microwakeword_src(args.force)
     fetch_rir(args.force)
     if not args.skip_background:
         fetch_audioset(args.audioset_clips, args.force)

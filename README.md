@@ -20,13 +20,14 @@ Compared to [TaterTotterson/microWakeWord-Trainer-Nvidia-Docker](https://github.
 Everything that should survive between sessions -- the venv, downloaded
 assets, and trained models -- lives under one directory, `$MWW_DATA_DIR`.
 Point that at a RunPod persistent Network Volume and a fresh pod skips
-straight to training with no re-bootstrap: the pip install only happens once
-*per volume*, and every pod after that reattaches the same volume regardless
-of which host it lands on.
+straight to training with no re-bootstrap: the install (via
+[uv](https://astral.sh/uv), already present on `runpod/base` images) only
+happens once *per volume*, and every pod after that reattaches the same
+volume regardless of which host it lands on.
 
 (We tried baking `requirements.txt` into a custom Docker image instead, so a
-pod wouldn't need to `pip install` at all. Reverted -- pulling that image on
-a RunPod host that hadn't cached it was just as slow as the install it was
+pod wouldn't need to install anything at all. Reverted -- pulling that image
+on a RunPod host that hadn't cached it was just as slow as the install it was
 supposed to avoid, and unlike a persistent volume, a pulled image doesn't
 follow you to a different host next time. The venv-on-volume approach below
 is the one-time cost that actually stays paid.)
@@ -45,7 +46,7 @@ cd /app && \
 MWW_DATA_DIR=/workspace/data ./train.sh "hey wild rider"
 ```
 
-First run on a fresh volume pays the full pip install + asset download cost.
+First run on a fresh volume pays the full install + asset download cost.
 Every subsequent pod that reattaches the same volume (even on a different
 host) skips both entirely and goes straight to sample generation.
 
@@ -53,10 +54,11 @@ host) skips both entirely and goes straight to sample generation.
 
 ```
 $MWW_DATA_DIR/
-  venv/                        one combined venv (torch + tensorflow); reused if requirements.txt is unchanged
+  venv/                        one combined venv (torch + tensorflow), managed by uv; reused if requirements.txt is unchanged
   assets/                      shared across every wake word you train
     piper/                     LibriTTS-R generator checkpoint (~200MB)
-    piper-sample-generator-src/  git clone, not pip installed -- see requirements.txt
+    piper-sample-generator-src/  git clone, not pip/uv installed -- see requirements.txt
+    microwakeword-src/          git clone, not pip/uv installed -- see requirements.txt
     rir/                       MIT environmental impulse responses (~8MB)
     background/                curated background-noise subset (audioset clips + fma_xs)
     negative_features/         pre-extracted negative spectrogram sets (speech, dinner_party, dinner_party_eval, no_speech)
@@ -175,8 +177,8 @@ letting torch resolve to its latest version pulls `nvidia-*-cu13` packages
 instead, which don't overlap with tensorflow's `cu12` requirement -- that
 would install two full CUDA library sets side by side (~2-3GB extra) instead
 of one shared set. It's also why the pod image itself doesn't need to be
-CUDA-flavored at all -- these pip packages bring their own CUDA runtime, the
-image just needs Python.
+CUDA-flavored at all -- these packages bring their own CUDA runtime, the
+image just needs Python (and uv).
 
 ## Alternative: bucket sync instead of a Network Volume
 
@@ -196,10 +198,18 @@ only if GPU availability is the bigger constraint.
 - No adversarial/similar-phrase negative generation (openWakeWord does this
   in the full microWakeWord recipe). Worth adding if false-accepts on
   phonetically similar words are a problem.
-- Not tested end-to-end yet. Two real RunPod attempts so far surfaced real
-  bugs before training ever started: a dead AudioSet URL, a CUDA-driver-gate
-  failure from an earlier Docker-image approach (since reverted -- see the
-  note in `scripts/00_setup_venv.sh`), and a slow image pull that prompted
-  dropping the custom-image idea entirely. The actual GPU training run is
-  still unverified end-to-end -- treat the next RunPod attempt as the real
-  integration test.
+- The pip -> uv migration (requirements.txt install path, and moving
+  microwakeword from an editable git install to a plain clone + sys.path/
+  PYTHONPATH injection, since uv has no editable-from-a-Git-URL support at
+  all) has only been verified locally on macOS with a throwaway lightweight
+  requirements.txt -- not yet run for real on a pod with the actual
+  torch/tensorflow/microwakeword stack. Treat the next RunPod run as the
+  real test of that specific change.
+
+The core pipeline itself (fetch -> generate -> build_features -> train ->
+export) has completed successfully end to end multiple times at this point,
+producing real, usable `.tflite` + manifest output -- see the project's
+commit history for the specific bugs that got found and fixed along the way
+(dead upstream URLs, missing upstream `__init__.py`, dependency collisions,
+etc.). Most of the debugging churn has been in one-time environment setup,
+not the training logic itself.

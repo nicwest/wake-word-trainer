@@ -22,6 +22,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from mww_trainer import paths  # noqa: E402
 
+# Not pip/uv installed -- see the note in requirements.txt and
+# mww_trainer.paths.microwakeword_src_dir's docstring for why.
+sys.path.insert(0, str(paths.microwakeword_src_dir()))
+
 
 def build_augmenter(augmentation_duration_s, background_min_snr_db, background_max_snr_db):
     from microwakeword.audio.augmentation import Augmentation
@@ -124,6 +128,9 @@ def main() -> None:
     parser.add_argument("--background-max-snr-db", type=int, default=10)
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
+
+    if not paths.microwakeword_src_dir().exists():
+        sys.exit(f"microwakeword source not found at {paths.microwakeword_src_dir()}. Run 01_fetch_assets.py first.")
 
     generated_dir = paths.generated_samples_dir(args.wake_word)
     if not generated_dir.exists() or not any(generated_dir.glob("*.wav")):

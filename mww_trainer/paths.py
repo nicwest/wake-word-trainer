@@ -35,6 +35,18 @@ def piper_sample_generator_src_dir() -> Path:
     return assets_dir() / "piper-sample-generator-src"
 
 
+def microwakeword_src_dir() -> Path:
+    """Git clone of the microWakeWord repo, pinned to a specific commit --
+    not pip/uv installed. microwakeword/audio/ has no __init__.py upstream,
+    and `find_packages()` (in setup.py) silently drops that whole subpackage
+    from a real wheel build; uv (unlike pip) has no editable-install-from-a-
+    Git-URL escape hatch to work around it the way requirements.txt used to.
+    Same fix as piper_sample_generator_src_dir() above: clone it ourselves
+    and put it on sys.path/PYTHONPATH wherever it's imported instead.
+    """
+    return assets_dir() / "microwakeword-src"
+
+
 def rir_dir() -> Path:
     return assets_dir() / "rir"
 

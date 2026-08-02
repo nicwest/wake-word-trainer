@@ -7,6 +7,7 @@ below) as you tune for your specific wake word.
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -171,8 +172,17 @@ def main() -> None:
         "--stride",
         "3",
     ]
+    # microwakeword isn't pip/uv installed -- see the note in requirements.txt.
+    # Put the git clone on PYTHONPATH so `-m microwakeword.model_train_eval`
+    # can find it (and its audio/ subpackage) in this subprocess.
+    if not paths.microwakeword_src_dir().exists():
+        sys.exit(f"microwakeword source not found at {paths.microwakeword_src_dir()}. Run 01_fetch_assets.py first.")
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(paths.microwakeword_src_dir()) + (os.pathsep + existing_pythonpath if existing_pythonpath else "")
+
     print("+", " ".join(cmd))
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, env=env)
 
 
 if __name__ == "__main__":
